@@ -79,5 +79,3 @@ object PlanePathChecker {
     system shutdown
   }
 }
-
-//https://github.com/danluu/akka-concurrency-wyatt/
