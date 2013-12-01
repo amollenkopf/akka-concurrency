@@ -1,0 +1,10 @@
+package akka.avionics
+
+import akka.actor.{ Actor }
+
+class Autopilot() extends Actor {
+
+  def receive = {
+    case _ =>
+  }
+}
