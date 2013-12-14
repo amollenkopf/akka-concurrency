@@ -8,12 +8,16 @@ import scala.concurrent.duration._
 
 object Plane {
   case object GiveMeControl //returns the control surface to the actor that asks for it
+  case object LostControl
+  case object TakeControl
   case class Controls(controls: ActorRef)
-  def apply() = new Plane with AltimeterProvider with PilotProvider with LeadFlightAttendantProvider
+  def apply() = new Plane with AltimeterProvider with HeadingIndicatorProvider with PilotProvider with LeadFlightAttendantProvider
 }
 
-class Plane extends Actor with ActorLogging { this: AltimeterProvider with PilotProvider with LeadFlightAttendantProvider =>
+class Plane extends Actor with ActorLogging {
+  this: AltimeterProvider with HeadingIndicatorProvider with PilotProvider with LeadFlightAttendantProvider =>
   import Altimeter._
+  import HeadingIndicator._
   import Plane._
 
   val configPath = "akka.avionics.flightcrew"
@@ -30,9 +34,10 @@ class Plane extends Actor with ActorLogging { this: AltimeterProvider with Pilot
     val plane = self
     val equipment = context.actorOf(Props(new IsolatedResumeSupervisor with OneForOneStrategyFactory {
       def childStarter() = {
-        val alt = context.actorOf(Props(newAltimeter), "Altimeter")
+        val altimeter = context.actorOf(Props(newAltimeter), "Altimeter")
+        val headingIndicator = context.actorOf(Props(newHeadingIndicator), "HeadingIndicator")
         context.actorOf(Props(newAutopilot()), "Autopilot")
-        context.actorOf(Props(new ControlSurface(alt)), "ControlSurface")
+        context.actorOf(Props(new ControlSurface(plane, altimeter, headingIndicator)), "ControlSurface")
       }
     }), "Equipment")
     Await.result(equipment ? IsolatedLifeCycleSupervisor.WaitForStart, 1.second)
@@ -68,6 +73,8 @@ class Plane extends Actor with ActorLogging { this: AltimeterProvider with Pilot
       sender ! actorForControls("ControlSurface") //Controls(...)
     case AltitudeUpdate(altitude) =>
       log info (s"Altitude is now: $altitude")
+    case LostControl =>
+      actorForControls("Autopilot") ! TakeControl
   }
 }
 

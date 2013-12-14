@@ -2,6 +2,7 @@ package akka.avionics
 
 import akka.actor.{ Actor, ActorRef, ActorLogging, ActorSystem, Props, OneForOneStrategy, SupervisorStrategy }
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 trait AltimeterProvider {
   def newAltimeter: Actor = Altimeter()
@@ -25,7 +26,7 @@ class Altimeter extends Actor with ActorLogging { this: EventSource => //self-ty
   var altitude = 16000d //our current altitude
   var lastTick = System.currentTimeMillis //represents how much time has passed, as time passes, we need to change the altitude
   implicit val ec = context.dispatcher
-  var ticker = context.system.scheduler.schedule(100.millis, 100.millis, self, Tick) //schedules tick messages
+  var ticker = context.system.scheduler.schedule(100 millis, 100 millis, self, Tick) //schedules tick messages
 
   case object Tick //An internal message we send to ourselves to tell us to update our altitude
 
