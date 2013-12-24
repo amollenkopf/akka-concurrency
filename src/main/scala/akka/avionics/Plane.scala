@@ -2,6 +2,7 @@ package akka.avionics
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
 import akka.pattern.ask
+import akka.routing.FromConfig
 import akka.util.Timeout
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -11,11 +12,11 @@ object Plane {
   case object LostControl
   case object TakeControl
   case class Controls(controls: ActorRef)
-  def apply() = new Plane with AltimeterProvider with HeadingIndicatorProvider with PilotProvider with LeadFlightAttendantProvider
+  def apply() = new Plane with AltimeterProvider with HeadingIndicatorProvider with PilotProvider with FlightAttendantProvider
 }
 
 class Plane extends Actor with ActorLogging {
-  this: AltimeterProvider with HeadingIndicatorProvider with PilotProvider with LeadFlightAttendantProvider =>
+  this: AltimeterProvider with HeadingIndicatorProvider with PilotProvider with FlightAttendantProvider =>
   import Altimeter._
   import HeadingIndicator._
   import Plane._
@@ -43,24 +44,25 @@ class Plane extends Actor with ActorLogging {
     Await.result(equipment ? IsolatedLifeCycleSupervisor.WaitForStart, 1.second)
   }
 
-  def startPilots() = {
+  def startPeople() = {
     val plane = self
     val autopilot = actorForControls("Autopilot")
     val controls = actorForControls("ControlSurface")
     val altimeter = actorForControls("Altimeter")
-    val pilots = context.actorOf(Props(new IsolatedStopSupervisor with OneForOneStrategyFactory {
+    val people = context.actorOf(Props(new IsolatedStopSupervisor with OneForOneStrategyFactory {
       def childStarter() = {
         val copilot = context.actorOf(Props(newCopilot(plane, altimeter)), copilotName)
         val pilot = context.actorOf(Props(newPilot(plane, autopilot, controls, altimeter)), pilotName)
+        val leadAttendant = context.actorOf(Props(newFlightAttendant).withRouter(FromConfig()), "FlightAttendantRouter")
+        val passengers = context.actorOf(Props(PassengerSupervisor(leadAttendant)), "Passengers")
       }
-    }), "Pilots")
-    context.actorOf(Props(newLeadFlightAttendant), leadAttendantName)
-    Await.result(pilots ? IsolatedLifeCycleSupervisor.WaitForStart, 1.second)
+    }), "People")
+    Await.result(people ? IsolatedLifeCycleSupervisor.WaitForStart, 1.second)
   }
 
   override def preStart() = {
     startEquipment()
-    startPilots()
+    startPeople()
 
     actorForControls("Altimeter") ! EventSource.RegisterListener(self)
     actorForPilots(pilotName) ! Pilot.ReadyToGo

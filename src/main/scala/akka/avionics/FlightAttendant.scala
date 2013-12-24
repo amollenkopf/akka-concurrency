@@ -8,6 +8,14 @@ trait AttendantResponsiveness { //different flight attendants have different lev
   val responseDuration = scala.util.Random.nextInt(maxResponseTime).millis
 }
 
+trait FlightAttendantProvider {
+  def newFlightAttendant(): Actor = {
+    new FlightAttendant with AttendantResponsiveness {
+      override val maxResponseTime = 300000
+    }
+  }
+}
+
 object FlightAttendant {
   case class GetDrink(drinkName: String)
   case class Drink(drinkName: String)
