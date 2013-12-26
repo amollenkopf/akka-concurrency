@@ -1,6 +1,10 @@
 package akka.avionics
 import akka.actor.{ Actor, ActorRef, ActorLogging, ActorKilledException, ActorInitializationException, OneForOneStrategy, Props, SupervisorStrategy }
+import akka.pattern.{ ask, pipe }
 import akka.routing.BroadcastRouter
+import akka.util.Timeout
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object PassengerSupervisor {
   case object GetPassengerBroadcaster
@@ -37,11 +41,14 @@ class PassengerSupervisor(callButton: ActorRef) extends Actor with ActorLogging 
         }
       }
       def receive = {
-        case GetChildren(forSomeone: ActorRef) => sender ! Children(context.children, forSomeone)
+        case GetChildren(forSomeone: ActorRef) => //sender ! context.children.toSeq
+          sender ! Children(context.children, forSomeone)
       }
     }), "PassengersSupervisor")
   }
 
+  import context.dispatcher
+  implicit val timeout = Timeout(5 seconds)
   def noRouter: Receive = {
     case GetPassengerBroadcaster =>
       val passengers = context.actorFor("PassengersSupervisor")

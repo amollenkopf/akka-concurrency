@@ -11,12 +11,13 @@ trait AltimeterProvider {
 object Altimeter {
   case class RateChange(amount: Float)
   case class AltitudeUpdate(altitude: Double)
-  def apply() = new Altimeter with EventSourceProducer //mixes a trait in at construction time
+  def apply() = new Altimeter with EventSourceProducer with StatusReporter //mixes a trait in at construction time
 }
 
-class Altimeter extends Actor with ActorLogging { this: EventSource => //self-typing
+class Altimeter extends Actor with ActorLogging with StatusReporter { this: EventSource => //self-typing
   import Altimeter._
   import AltitudeCalculator._
+  import StatusReporter._
 
   override val supervisorStrategy = OneForOneStrategy(-1, Duration.Inf) {
     case _ => SupervisorStrategy.Restart
@@ -29,6 +30,7 @@ class Altimeter extends Actor with ActorLogging { this: EventSource => //self-ty
   var ticker = context.system.scheduler.schedule(100 millis, 100 millis, self, Tick) //schedules tick messages
 
   case object Tick //An internal message we send to ourselves to tell us to update our altitude
+  def currentStatus = StatusOk
 
   var altitudeCalculator: ActorRef = context.system.deadLetters 
   override def preStart() = {
