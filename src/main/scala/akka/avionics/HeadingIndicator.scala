@@ -11,7 +11,9 @@ trait HeadingIndicatorProvider {
 object HeadingIndicator {
   case class BankChange(amount: Float) //how fast plane is changing direction
   case class HeadingUpdate(heading: Float) //event published to listeners that want to know where the plane is headed
-  def apply() = new HeadingIndicator with EventSourceProducer
+  case object GetCurrentHeading
+  case class CurrentHeading(heading: Float)
+  def apply() = new HeadingIndicator with EventSourceProducer with StatusReporter
 }
 
 trait HeadingIndicator extends Actor with ActorLogging with StatusReporter { this: EventSource =>
@@ -36,6 +38,8 @@ trait HeadingIndicator extends Actor with ActorLogging with StatusReporter { thi
       heading = (heading + (360 + (timeDeltaSeconds * degrees))) % 360
       lastTick = tick
       sendEvent(HeadingUpdate(heading))
+    case GetCurrentHeading =>
+      sender ! CurrentHeading(heading)
   }
 
   def receive = statusReceive orElse eventSourceReceive orElse headingIndicatorReceive

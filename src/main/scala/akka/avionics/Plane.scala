@@ -26,7 +26,7 @@ class Plane extends Actor with ActorLogging {
   val pilotName = config.getString(s"$configPath.pilotName")
   val copilotName = config.getString(s"$configPath.copilotName")
   val leadAttendantName = config.getString(s"$configPath.leadAttendantName")
-  implicit val askTimeout = Timeout(1.seconds)
+  implicit val askTimeout = Timeout(10.seconds)
 
   def actorForControls(name: String) = context.actorFor("Equipment/" + name)
   def actorForPilots(name: String) = context.actorFor("Pilots/" + name)
@@ -53,11 +53,14 @@ class Plane extends Actor with ActorLogging {
       def childStarter() = {
         val copilot = context.actorOf(Props(newCopilot(plane, altimeter)), copilotName)
         val pilot = context.actorOf(Props(newPilot(plane, autopilot, controls, altimeter)), pilotName)
-        val leadAttendant = context.actorOf(Props(newFlightAttendant).withRouter(FromConfig()), "FlightAttendantRouter")
-        val passengers = context.actorOf(Props(PassengerSupervisor(leadAttendant)), "Passengers")
+        //val leadAttendant = context.actorOf(Props(newFlightAttendant).withRouter(FromConfig()), "FlightAttendantRouter")
+        //val passengers = context.actorOf(Props(PassengerSupervisor(leadAttendant)), "Passengers")
+        //println("pa done")
       }
     }), "People")
-    Await.result(people ? IsolatedLifeCycleSupervisor.WaitForStart, 1.second)
+    println("pe done")
+    Await.result(people ? IsolatedLifeCycleSupervisor.WaitForStart, 10.second)
+    println("aw done")
   }
 
   override def preStart() = {
@@ -77,6 +80,10 @@ class Plane extends Actor with ActorLogging {
       log info (s"Altitude is now: $altitude")
     case LostControl =>
       actorForControls("Autopilot") ! TakeControl
+    case GetCurrentHeading =>
+      actorForControls("HeadingIndicator") forward GetCurrentHeading
+    case GetCurrentAltitude =>
+      actorForControls("Altimeter") forward GetCurrentAltitude
   }
 }
 

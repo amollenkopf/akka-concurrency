@@ -10,9 +10,14 @@ trait AttendantResponsiveness { //different flight attendants have different lev
 
 trait FlightAttendantProvider {
   def newFlightAttendant(): Actor = {
+    println("====> FAP.newFlightAttendant One")
+    new FlightAttendant() with AttendantResponsiveness
+    /*
     new FlightAttendant with AttendantResponsiveness {
-      override val maxResponseTime = 300000
+      println("====> FAP.newFlightAttendant Two")
+      override val maxResponseTime: Int = 300000
     }
+    */
   }
 }
 
@@ -23,7 +28,10 @@ object FlightAttendant {
   case object Busy
   case object Yes
   case object No
-  def apply() = new FlightAttendant with AttendantResponsiveness
+  def apply() = {
+    println("====> FA.apply One")
+    new FlightAttendant with AttendantResponsiveness
+  }
 }
 
 class FlightAttendant extends Actor { this: AttendantResponsiveness =>

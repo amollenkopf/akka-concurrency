@@ -11,7 +11,7 @@ object Avionics {
   implicit val timeout = Timeout(5.seconds)
   val system = ActorSystem("PlaneSimulation")
   val plane = system.actorOf(Props(Plane()), "Plane")
-
+  
   def main(args: Array[String]) {
     val controls = Await.result((plane ? Plane.GiveMeControl).mapTo[ActorRef], 5.seconds) //get the controls
     system.scheduler.scheduleOnce(200.millis) { controls ! ControlSurface.StickBack(1f) } //take off

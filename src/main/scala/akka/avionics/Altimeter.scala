@@ -11,6 +11,8 @@ trait AltimeterProvider {
 object Altimeter {
   case class RateChange(amount: Float)
   case class AltitudeUpdate(altitude: Double)
+  case object GetCurrentAltitude
+  case class CurrentAltitude(altitude: Double)
   def apply() = new Altimeter with EventSourceProducer with StatusReporter //mixes a trait in at construction time
 }
 
@@ -32,11 +34,11 @@ class Altimeter extends Actor with ActorLogging with StatusReporter { this: Even
   case object Tick //An internal message we send to ourselves to tell us to update our altitude
   def currentStatus = StatusOk
 
-  var altitudeCalculator: ActorRef = context.system.deadLetters 
+  var altitudeCalculator: ActorRef = context.system.deadLetters
   override def preStart() = {
     altitudeCalculator = context.actorOf(Props(new AltitudeCalculator), "AltitudeCalculator")
   }
-  
+
   def altimeterReceive: Receive = {
     case RateChange(amount) => //Rate of climb has changed
       rateOfClimb = amount.min(1.0f).max(-1.0f) * maxRateOfClimb
@@ -46,11 +48,14 @@ class Altimeter extends Actor with ActorLogging with StatusReporter { this: Even
       altitudeCalculator ! CalculateAltitude(altitude, lastTick, tick, rateOfClimb)
       lastTick = tick
     case AltitudeCalculated(newTick, newAltitude) =>
-      altitude = newAltitude 
+      altitude = newAltitude
       sendEvent(AltitudeUpdate(altitude))
+    case GetCurrentAltitude =>
+      log.info("Altimeter - altitude request")
+      sender ! CurrentAltitude(altitude)
   }
 
-  def receive = { eventSourceReceive orElse altimeterReceive }
+  def receive = { statusReceive orElse eventSourceReceive orElse altimeterReceive }
 
   override def postStop(): Unit = ticker.cancel
 }
