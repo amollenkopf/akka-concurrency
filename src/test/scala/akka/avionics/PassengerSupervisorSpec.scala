@@ -37,7 +37,7 @@ class PassengerSupervisorSpec extends TestKit(ActorSystem("PassengerSupervisorSp
 
   "PassengerSupervisor" should {
     "work" in {
-      val a = system.actorOf(Props(new PassengerSupervisor(testActor) with TestPassengerProvider))
+      val a = system.actorOf(Props(new PassengerSupervisor(testActor, testActor) with TestPassengerProvider))
       a ! GetPassengerBroadcaster
       val broadcaster = expectMsgType[PassengerBroadcaster].broadcaster
       broadcaster ! "Broadcasted messages rock!"

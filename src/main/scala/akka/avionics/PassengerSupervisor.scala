@@ -9,10 +9,10 @@ import scala.language.postfixOps
 object PassengerSupervisor {
   case object GetPassengerBroadcaster
   case class PassengerBroadcaster(broadcaster: ActorRef)
-  def apply(callButton: ActorRef) = new PassengerSupervisor(callButton) with PassengerProvider
+  def apply(callButton: ActorRef, bathrooms: ActorRef) = new PassengerSupervisor(callButton, bathrooms) with PassengerProvider
 }
 
-class PassengerSupervisor(callButton: ActorRef) extends Actor with ActorLogging { this: PassengerProvider =>
+class PassengerSupervisor(callButton: ActorRef, bathrooms: ActorRef) extends Actor with ActorLogging { this: PassengerProvider =>
   import PassengerSupervisor._
 
   override val supervisorStrategy = OneForOneStrategy() {
@@ -56,7 +56,7 @@ class PassengerSupervisor(callButton: ActorRef) extends Actor with ActorLogging 
     case Children(passengers, destinedFor) =>
       val passengerPaths: Iterable[String] = passengers.map(passenger => passenger.path.toString)
       val bRouter = BroadcastRouter(routees = passengerPaths.toIndexedSeq)
-      val router = context.actorOf(Props(PassengerSupervisor(callButton)).withRouter(bRouter), "Passengers")
+      val router = context.actorOf(Props(PassengerSupervisor(callButton, bathrooms)).withRouter(bRouter), "Passengers")
       destinedFor ! PassengerBroadcaster(router)
       context.become(withRouter(router))
   }

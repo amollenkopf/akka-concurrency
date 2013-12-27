@@ -1,11 +1,13 @@
 package akka.avionics
 
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props, OneForOneStrategy, SupervisorStrategy }
+import akka.agent.Agent
 import akka.pattern.ask
-import akka.routing.FromConfig
+import akka.routing.{ FromConfig, RoundRobinRouter }
 import akka.util.Timeout
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object Plane {
   case object GiveMeControl //returns the control surface to the actor that asks for it
@@ -26,7 +28,11 @@ class Plane extends Actor with ActorLogging {
   val pilotName = config.getString(s"$configPath.pilotName")
   val copilotName = config.getString(s"$configPath.copilotName")
   val leadAttendantName = config.getString(s"$configPath.leadAttendantName")
-  implicit val askTimeout = Timeout(10.seconds)
+
+  val maleBathroomCounter = Agent(GenderAndTime(Male, 0 seconds, 0))(context.dispatcher)
+  val femaleBathroomCounter = Agent(GenderAndTime(Female, 0 seconds, 0))(context.dispatcher)
+
+  implicit val askTimeout = Timeout(1 seconds)
 
   def actorForControls(name: String) = context.actorFor("Equipment/" + name)
   def actorForPilots(name: String) = context.actorFor("Pilots/" + name)
@@ -44,8 +50,16 @@ class Plane extends Actor with ActorLogging {
     Await.result(equipment ? IsolatedLifeCycleSupervisor.WaitForStart, 1.second)
   }
 
+  def startUtilities() = {
+    context.actorOf(Props(new Bathroom(maleBathroomCounter, femaleBathroomCounter)).withRouter(
+      RoundRobinRouter(nrOfInstances = 4, supervisorStrategy = OneForOneStrategy() {
+        case _ => SupervisorStrategy.Resume
+      })), "Bathrooms")
+  }
+
   def startPeople() = {
     val plane = self
+    val bathrooms = context.actorFor("Bathrooms")
     val autopilot = actorForControls("Autopilot")
     val controls = actorForControls("ControlSurface")
     val altimeter = actorForControls("Altimeter")
@@ -54,17 +68,18 @@ class Plane extends Actor with ActorLogging {
         val copilot = context.actorOf(Props(newCopilot(plane, altimeter)), copilotName)
         val pilot = context.actorOf(Props(newPilot(plane, autopilot, controls, altimeter)), pilotName)
         //val leadAttendant = context.actorOf(Props(newFlightAttendant).withRouter(FromConfig()), "FlightAttendantRouter")
-        //val passengers = context.actorOf(Props(PassengerSupervisor(leadAttendant)), "Passengers")
+        //val passengers = context.actorOf(Props(PassengerSupervisor(leadAttendant, bathrooms)), "Passengers")
         //println("pa done")
       }
     }), "People")
     println("pe done")
-    Await.result(people ? IsolatedLifeCycleSupervisor.WaitForStart, 10.second)
+    Await.result(people ? IsolatedLifeCycleSupervisor.WaitForStart, 1 second)
     println("aw done")
   }
 
   override def preStart() = {
     startEquipment()
+    startUtilities()
     startPeople()
 
     actorForControls("Altimeter") ! EventSource.RegisterListener(self)
@@ -72,10 +87,19 @@ class Plane extends Actor with ActorLogging {
     actorForPilots(copilotName) ! Pilot.ReadyToGo
   }
 
+  override def postStop() = {
+    val male = maleBathroomCounter()  //same as .apply()
+    val female = femaleBathroomCounter.apply()
+    // Can also access on main thread via femaleBathroomCounter.get()
+    // Can also access via future: Await.result(femaleBathroomCounter.future, 5 seconds).asInstanceOf[GenderAndTime]
+    log.info(s"${male.count} men used the bathroom with a peak usage time of ${male.peakDuration}")
+    log.info(s"${female.count} women used the bathroom with a peak usage time of ${female.peakDuration}")
+  }
+  
   def receive = {
     case GiveMeControl =>
       log.info(s"Plane giving control to ${sender.path.name}, ${sender.toString}")
-      sender ! actorForControls("ControlSurface") //Controls(...)
+      sender ! actorForControls("ControlSurface")
     case AltitudeUpdate(altitude) =>
       log info (s"Altitude is now: $altitude")
     case LostControl =>
